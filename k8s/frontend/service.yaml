@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: ai-chatbot
+  namespace: ai-chatbot-web-service
 spec:
   selector:
     app: frontend

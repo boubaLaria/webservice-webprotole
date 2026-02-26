@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ai-chatbot-ingress
-  namespace: ai-chatbot
+  namespace: ai-chatbot-web-service
   annotations:
     kubernetes.io/ingress.class: nginx
     # SSE — désactiver le buffering pour que les tokens arrivent en temps réel

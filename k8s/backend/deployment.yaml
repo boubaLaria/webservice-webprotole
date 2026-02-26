@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: ai-chatbot
+  namespace: ai-chatbot-web-service
   labels:
     app: backend
 spec:
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: $DOCKERHUB_USERNAME/webservice-webprotole-backend:latest
+          image: boubalaria/webservice-webprotole-backend:latest
           ports:
             - containerPort: 8000
           env:
