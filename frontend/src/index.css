@@ -1,0 +1,374 @@
+/* ══════════════════════════════════════════════════════════════
+   Design System — AI Chatbot Atelier 2
+   Thème sombre, accent par architecture
+   ══════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary:    #0f172a;
+  --bg-secondary:  #1e293b;
+  --bg-input:      #0d1526;
+  --border:        #334155;
+  --text-primary:  #f1f5f9;
+  --text-secondary:#94a3b8;
+  --text-muted:    #64748b;
+
+  /* Couleur par architecture */
+  --color-sync:    #3b82f6;   /* bleu   */
+  --color-polling: #f59e0b;   /* ambre  */
+  --color-sse:     #10b981;   /* vert   */
+  --color-ws:      #8b5cf6;   /* violet */
+
+  --radius:    8px;
+  --radius-lg: 14px;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── Layout ───────────────────────────────────────────────────────── */
+
+.app {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--color-sync), var(--color-ws));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.4rem;
+}
+
+header p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+footer {
+  text-align: center;
+  margin-top: 2.5rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+main {
+  min-height: 460px;
+}
+
+/* ── Onglets ──────────────────────────────────────────────────────── */
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .tabs { grid-template-columns: repeat(2, 1fr); }
+}
+
+.tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.65rem 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.18s ease;
+  text-align: center;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  border-color: #475569;
+}
+
+.tab-badge {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+/* Onglet actif — couleur par mode */
+.tab-btn.active.sync    { border-color: var(--color-sync);    color: var(--color-sync);    background: rgba(59,130,246,.1); }
+.tab-btn.active.polling { border-color: var(--color-polling); color: var(--color-polling); background: rgba(245,158,11,.1); }
+.tab-btn.active.sse     { border-color: var(--color-sse);     color: var(--color-sse);     background: rgba(16,185,129,.1); }
+.tab-btn.active.ws      { border-color: var(--color-ws);      color: var(--color-ws);      background: rgba(139,92,246,.1); }
+
+.tab-btn.active .tab-badge { color: inherit; opacity: 0.7; }
+
+/* ── Panneau de chat ──────────────────────────────────────────────── */
+
+.chat-panel {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.panel-header .description {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* Couleur du titre par mode */
+.panel-header.sync    h2 { color: var(--color-sync); }
+.panel-header.polling h2 { color: var(--color-polling); }
+.panel-header.sse     h2 { color: var(--color-sse); }
+.panel-header.ws      h2 { color: var(--color-ws); }
+
+.panel-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Contrôles ────────────────────────────────────────────────────── */
+
+.model-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.model-select-row label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 160px;
+  cursor: pointer;
+}
+
+select:focus { outline: none; border-color: #475569; }
+
+.input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+textarea {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  resize: vertical;
+  min-height: 84px;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color 0.18s;
+}
+
+textarea:focus  { outline: none; border-color: #475569; }
+textarea::placeholder { color: var(--text-muted); }
+
+.send-btn {
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: filter 0.18s, opacity 0.18s;
+  flex-shrink: 0;
+  min-width: 100px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: #fff;
+}
+
+.send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.send-btn:not(:disabled):hover { filter: brightness(1.15); }
+
+.send-btn.sync    { background: var(--color-sync); }
+.send-btn.polling { background: var(--color-polling); }
+.send-btn.sse     { background: var(--color-sse); }
+.send-btn.ws      { background: var(--color-ws); }
+
+/* ── Zone de réponse ─────────────────────────────────────────────── */
+
+.response-area {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  min-height: 130px;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.response-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Métriques ────────────────────────────────────────────────────── */
+
+.metrics {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.metric-badge {
+  padding: 0.22rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.metric-badge.total  { background: rgba(59,130,246,.12);  border: 1px solid rgba(59,130,246,.25);  color: var(--color-sync); }
+.metric-badge.first  { background: rgba(16,185,129,.12);  border: 1px solid rgba(16,185,129,.25);  color: var(--color-sse); }
+.metric-badge.polls  { background: rgba(245,158,11,.12);  border: 1px solid rgba(245,158,11,.25);  color: var(--color-polling); }
+
+/* ── Badges de statut (Polling) ──────────────────────────────────── */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.status-badge.pending    { background: rgba(100,116,139,.15); color: #94a3b8; border: 1px solid rgba(100,116,139,.3); }
+.status-badge.processing { background: rgba(245,158,11,.12);  color: var(--color-polling); border: 1px solid rgba(245,158,11,.25); }
+.status-badge.completed  { background: rgba(16,185,129,.12);  color: var(--color-sse); border: 1px solid rgba(16,185,129,.25); }
+.status-badge.error      { background: rgba(239,68,68,.12);   color: #ef4444; border: 1px solid rgba(239,68,68,.25); }
+
+.task-info {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+/* ── WS status dot ───────────────────────────────────────────────── */
+
+.ws-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.ws-status-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* ── Animations ──────────────────────────────────────────────────── */
+
+/* Spinner de chargement */
+.loader {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.55s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Indicateur de frappe (3 points) */
+.typing-indicator {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+.typing-indicator span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  animation: bounce-dot 1.3s ease-in-out infinite;
+}
+
+.typing-indicator span:nth-child(2) { animation-delay: 0.18s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes bounce-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30% { transform: translateY(-7px); opacity: 1; }
+}
+
+/* Curseur clignotant (streaming SSE / WS) */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--text-secondary);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.9s step-end infinite;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
