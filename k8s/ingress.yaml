@@ -38,4 +38,4 @@ spec:
               service:
                 name: frontend
                 port:
-                  number: 80
+                  number: 12000
