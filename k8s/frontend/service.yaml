@@ -8,6 +8,6 @@ spec:
     app: frontend
   type: ClusterIP
   ports:
-    - port: 80
-      targetPort: 12000
+    - port: 12000
+      targetPort: 80
       protocol: TCP
