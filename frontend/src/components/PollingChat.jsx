@@ -7,8 +7,11 @@
  *   3. Arrêt du polling quand status === "completed" | "error"
  * Supporte l'historique multi-tours.
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import MessageList from "./MessageList";
+import { loadMessages, saveMessages, clearMessages } from "../utils/db";
+
+const DB_KEY = "polling";
 
 const MODELS = [
   { id: "llama-3.1-8b-instant",   label: "LLaMA 3.1 8B (Rapide)" },
@@ -35,6 +38,16 @@ export default function PollingChat() {
 
   const intervalRef  = useRef(null);
   const historyRef   = useRef([]);
+
+  // Chargement initial depuis IndexedDB
+  useEffect(() => {
+    loadMessages(DB_KEY).then(setMessages).catch(() => {});
+  }, []);
+
+  // Sauvegarde automatique à chaque changement de messages
+  useEffect(() => {
+    if (messages.length > 0) saveMessages(DB_KEY, messages).catch(() => {});
+  }, [messages]);
 
   const stopPolling = () => {
     if (intervalRef.current) {
@@ -144,7 +157,7 @@ export default function PollingChat() {
           >
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
-          <button className="clear-btn" onClick={() => { setMessages([]); setStatus(null); }} disabled={loading || messages.length === 0}>
+          <button className="clear-btn" onClick={() => { clearMessages(DB_KEY).catch(() => {}); setMessages([]); setStatus(null); }} disabled={loading || messages.length === 0}>
             Nouvelle conversation
           </button>
         </div>

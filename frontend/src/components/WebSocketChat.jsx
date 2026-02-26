@@ -9,6 +9,9 @@
  */
 import { useState, useRef, useEffect } from "react";
 import MessageList from "./MessageList";
+import { loadMessages, saveMessages, clearMessages } from "../utils/db";
+
+const DB_KEY = "websocket";
 
 const MODELS = [
   { id: "llama-3.1-8b-instant",   label: "LLaMA 3.1 8B (Rapide)" },
@@ -35,6 +38,16 @@ export default function WebSocketChat() {
   const startRef      = useRef(null);
   const firstTokenRef = useRef(true);
   const assistantIdxRef = useRef(null);
+
+  // Chargement initial depuis IndexedDB
+  useEffect(() => {
+    loadMessages(DB_KEY).then(setMessages).catch(() => {});
+  }, []);
+
+  // Sauvegarde automatique à chaque changement de messages
+  useEffect(() => {
+    if (messages.length > 0) saveMessages(DB_KEY, messages).catch(() => {});
+  }, [messages]);
 
   // Nettoyage à la destruction du composant
   useEffect(() => {
@@ -169,7 +182,7 @@ export default function WebSocketChat() {
           </select>
           <span className="ws-dot" style={{ background: color }} title={`WebSocket : ${label}`} />
           <span className="ws-status-label" style={{ color }}>{label}</span>
-          <button className="clear-btn" onClick={() => setMessages([])} disabled={loading || messages.length === 0}>
+          <button className="clear-btn" onClick={() => { clearMessages(DB_KEY).catch(() => {}); setMessages([]); }} disabled={loading || messages.length === 0}>
             Nouvelle conversation
           </button>
         </div>

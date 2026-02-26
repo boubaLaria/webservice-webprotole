@@ -7,8 +7,11 @@
  *   On lit le flux avec fetch + ReadableStream (compatible POST).
  * Supporte l'historique multi-tours.
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import MessageList from "./MessageList";
+import { loadMessages, saveMessages, clearMessages } from "../utils/db";
+
+const DB_KEY = "sse";
 
 const MODELS = [
   { id: "llama-3.1-8b-instant",   label: "LLaMA 3.1 8B (Rapide)" },
@@ -26,6 +29,16 @@ export default function SSEChat() {
   const abortRef      = useRef(null);
   const startRef      = useRef(null);
   const firstTokenRef = useRef(true);
+
+  // Chargement initial depuis IndexedDB
+  useEffect(() => {
+    loadMessages(DB_KEY).then(setMessages).catch(() => {});
+  }, []);
+
+  // Sauvegarde automatique à chaque changement de messages
+  useEffect(() => {
+    if (messages.length > 0) saveMessages(DB_KEY, messages).catch(() => {});
+  }, [messages]);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -151,7 +164,7 @@ export default function SSEChat() {
           >
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
-          <button className="clear-btn" onClick={() => setMessages([])} disabled={loading || messages.length === 0}>
+          <button className="clear-btn" onClick={() => { clearMessages(DB_KEY).catch(() => {}); setMessages([]); }} disabled={loading || messages.length === 0}>
             Nouvelle conversation
           </button>
         </div>
