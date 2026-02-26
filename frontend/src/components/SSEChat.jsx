@@ -5,8 +5,10 @@
  *   POST /api/sse/chat → connexion HTTP longue durée
  *   Le serveur pousse les tokens via le format text/event-stream.
  *   On lit le flux avec fetch + ReadableStream (compatible POST).
+ * Supporte l'historique multi-tours.
  */
 import { useState, useRef } from "react";
+import MessageList from "./MessageList";
 
 const MODELS = [
   { id: "llama-3.1-8b-instant",   label: "LLaMA 3.1 8B (Rapide)" },
@@ -15,20 +17,19 @@ const MODELS = [
 ];
 
 export default function SSEChat() {
-  const [message,        setMessage]        = useState("");
-  const [response,       setResponse]       = useState("");
-  const [loading,        setLoading]        = useState(false);
-  const [latency,        setLatency]        = useState(null);
-  const [firstTokenTime, setFirstTokenTime] = useState(null);
-  const [model,          setModel]          = useState(MODELS[0].id);
-  const [error,          setError]          = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input,    setInput]    = useState("");
+  const [loading,  setLoading]  = useState(false);
+  const [model,    setModel]    = useState(MODELS[0].id);
+  const [error,    setError]    = useState(null);
 
+  const abortRef      = useRef(null);
   const startRef      = useRef(null);
   const firstTokenRef = useRef(true);
-  const abortRef      = useRef(null);
 
   const sendMessage = async () => {
-    if (!message.trim() || loading) return;
+    const text = input.trim();
+    if (!text || loading) return;
 
     // Annuler un streaming précédent si toujours en cours
     if (abortRef.current) abortRef.current.abort();
@@ -36,10 +37,15 @@ export default function SSEChat() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const userMsg = { role: "user", content: text };
+    const history = [...messages, userMsg];
+    // Placeholder pour la réponse de l'assistant
+    const assistantIdx = history.length;
+    const withPlaceholder = [...history, { role: "assistant", content: "" }];
+
+    setMessages(withPlaceholder);
+    setInput("");
     setLoading(true);
-    setResponse("");
-    setLatency(null);
-    setFirstTokenTime(null);
     setError(null);
     firstTokenRef.current = true;
     startRef.current = Date.now();
@@ -48,7 +54,10 @@ export default function SSEChat() {
       const res = await fetch("/api/sse/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, model }),
+        body: JSON.stringify({
+          messages: history.map(({ role, content }) => ({ role, content })),
+          model,
+        }),
         signal: controller.signal,
       });
 
@@ -61,6 +70,7 @@ export default function SSEChat() {
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer    = "";
+      let firstToken = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -68,20 +78,35 @@ export default function SSEChat() {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop() ?? ""; // garder la ligne incomplète
+        buffer = lines.pop() ?? "";
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           try {
             const data = JSON.parse(line.slice(6));
             if (data.done) {
-              setLatency(Date.now() - startRef.current);
+              const total = Date.now() - startRef.current;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[assistantIdx] = {
+                  ...updated[assistantIdx],
+                  metrics: { firstToken, total },
+                };
+                return updated;
+              });
             } else if (data.token) {
               if (firstTokenRef.current) {
-                setFirstTokenTime(Date.now() - startRef.current);
+                firstToken = Date.now() - startRef.current;
                 firstTokenRef.current = false;
               }
-              setResponse((prev) => prev + data.token);
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[assistantIdx] = {
+                  ...updated[assistantIdx],
+                  content: updated[assistantIdx].content + data.token,
+                };
+                return updated;
+              });
             }
           } catch {
             // Ligne SSE malformée — on ignore
@@ -89,7 +114,11 @@ export default function SSEChat() {
         }
       }
     } catch (err) {
-      if (err.name !== "AbortError") setError(err.message);
+      if (err.name !== "AbortError") {
+        setError(err.message);
+        // Retirer le placeholder vide
+        setMessages((prev) => prev.filter((_, i) => i !== assistantIdx));
+      }
     } finally {
       setLoading(false);
     }
@@ -111,7 +140,7 @@ export default function SSEChat() {
       </div>
 
       <div className="panel-body">
-        {/* Sélecteur de modèle */}
+        {/* Sélecteur de modèle + nouvelle conversation */}
         <div className="model-select-row">
           <label htmlFor="sse-model">Modèle :</label>
           <select
@@ -122,56 +151,33 @@ export default function SSEChat() {
           >
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
+          <button className="clear-btn" onClick={() => setMessages([])} disabled={loading || messages.length === 0}>
+            Nouvelle conversation
+          </button>
         </div>
 
-        {/* Zone de saisie */}
-        <div className="input-row">
+        {error && <div className="error-banner">Erreur : {error}</div>}
+
+        {/* Liste de messages */}
+        <MessageList messages={messages} />
+
+        {/* Barre de saisie */}
+        <div className="chat-input-bar">
           <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Entrez votre message…"
             disabled={loading}
+            rows={2}
           />
           <button
             className="send-btn sse"
             onClick={sendMessage}
-            disabled={loading || !message.trim()}
+            disabled={loading || !input.trim()}
           >
             {loading ? <span className="loader" /> : "Envoyer"}
           </button>
-        </div>
-
-        {/* Métriques de latence */}
-        {(firstTokenTime !== null || latency !== null) && (
-          <div className="metrics">
-            {firstTokenTime !== null && (
-              <span className="metric-badge first">
-                ⚡ Premier token : {firstTokenTime} ms
-              </span>
-            )}
-            {latency !== null && (
-              <span className="metric-badge total">⏱ Temps total : {latency} ms</span>
-            )}
-          </div>
-        )}
-
-        {/* Réponse en streaming */}
-        <div className="response-area">
-          {error ? (
-            <span style={{ color: "#ef4444" }}>Erreur : {error}</span>
-          ) : response ? (
-            <>
-              {response}
-              {loading && <span className="streaming-cursor" />}
-            </>
-          ) : loading ? (
-            <div className="typing-indicator"><span /><span /><span /></div>
-          ) : (
-            <span className="response-placeholder">
-              Les tokens apparaîtront ici en temps réel au fil du streaming SSE…
-            </span>
-          )}
         </div>
       </div>
     </div>

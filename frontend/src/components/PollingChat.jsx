@@ -5,8 +5,10 @@
  *   1. POST /api/async/chat  → reçoit { task_id } immédiatement
  *   2. GET  /api/async/status/{task_id} toutes les 500 ms
  *   3. Arrêt du polling quand status === "completed" | "error"
+ * Supporte l'historique multi-tours.
  */
 import { useState, useRef } from "react";
+import MessageList from "./MessageList";
 
 const MODELS = [
   { id: "llama-3.1-8b-instant",   label: "LLaMA 3.1 8B (Rapide)" },
@@ -22,17 +24,17 @@ const STATUS_LABELS = {
 };
 
 export default function PollingChat() {
-  const [message,   setMessage]   = useState("");
-  const [response,  setResponse]  = useState("");
+  const [messages,  setMessages]  = useState([]);
+  const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
   const [status,    setStatus]    = useState(null);
   const [taskId,    setTaskId]    = useState(null);
-  const [latency,   setLatency]   = useState(null);
   const [pollCount, setPollCount] = useState(0);
   const [model,     setModel]     = useState(MODELS[0].id);
   const [error,     setError]     = useState(null);
 
-  const intervalRef = useRef(null);
+  const intervalRef  = useRef(null);
+  const historyRef   = useRef([]);
 
   const stopPolling = () => {
     if (intervalRef.current) {
@@ -42,13 +44,19 @@ export default function PollingChat() {
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || loading) return;
+    const text = input.trim();
+    if (!text || loading) return;
+
     stopPolling();
+
+    const userMsg = { role: "user", content: text };
+    const history = [...messages, userMsg];
+    historyRef.current = history;
+    setMessages(history);
+    setInput("");
     setLoading(true);
-    setResponse("");
     setStatus(null);
     setTaskId(null);
-    setLatency(null);
     setPollCount(0);
     setError(null);
 
@@ -58,7 +66,10 @@ export default function PollingChat() {
       const res = await fetch("/api/async/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, model }),
+        body: JSON.stringify({
+          messages: history.map(({ role, content }) => ({ role, content })),
+          model,
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { task_id } = await res.json();
@@ -78,22 +89,28 @@ export default function PollingChat() {
 
           if (data.status === "completed") {
             stopPolling();
-            setLatency(Date.now() - start);
-            setResponse(data.result ?? "");
+            const total = Date.now() - start;
+            setMessages([
+              ...historyRef.current,
+              { role: "assistant", content: data.result ?? "", metrics: { total, polls } },
+            ]);
             setLoading(false);
           } else if (data.status === "error") {
             stopPolling();
             setError(data.error ?? "Erreur inconnue");
+            setMessages(historyRef.current);
             setLoading(false);
           }
         } catch (err) {
           stopPolling();
           setError(`Erreur polling : ${err.message}`);
+          setMessages(historyRef.current);
           setLoading(false);
         }
       }, 500);
     } catch (err) {
       setError(err.message);
+      setMessages(historyRef.current);
       setLoading(false);
     }
   };
@@ -116,7 +133,7 @@ export default function PollingChat() {
       </div>
 
       <div className="panel-body">
-        {/* Sélecteur de modèle */}
+        {/* Sélecteur de modèle + nouvelle conversation */}
         <div className="model-select-row">
           <label htmlFor="polling-model">Modèle :</label>
           <select
@@ -127,66 +144,53 @@ export default function PollingChat() {
           >
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
-        </div>
-
-        {/* Zone de saisie */}
-        <div className="input-row">
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Entrez votre message…"
-            disabled={loading}
-          />
-          <button
-            className="send-btn polling"
-            onClick={sendMessage}
-            disabled={loading || !message.trim()}
-          >
-            {loading ? <span className="loader" /> : "Envoyer"}
+          <button className="clear-btn" onClick={() => { setMessages([]); setStatus(null); }} disabled={loading || messages.length === 0}>
+            Nouvelle conversation
           </button>
         </div>
 
-        {/* État & métriques */}
-        {status && (
-          <div className="metrics" style={{ flexDirection: "column", gap: "0.5rem" }}>
-            <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "center" }}>
-              <span className={`status-badge ${status}`}>
-                {isActive && (
-                  <span className="loader" style={{ width: 10, height: 10, borderWidth: 2 }} />
-                )}
-                {STATUS_LABELS[status]}
-              </span>
-              {pollCount > 0 && (
-                <span className="metric-badge polls">
-                  Requêtes de polling : {pollCount}
-                </span>
-              )}
-              {latency !== null && (
-                <span className="metric-badge total">⏱ Temps total : {latency} ms</span>
-              )}
-            </div>
+        {/* Indicateur de statut polling */}
+        {status && isActive && (
+          <div className="metrics">
+            <span className={`status-badge ${status}`}>
+              <span className="loader" style={{ width: 10, height: 10, borderWidth: 2 }} />
+              {STATUS_LABELS[status]}
+            </span>
+            {pollCount > 0 && (
+              <span className="metric-badge polls">Requêtes : {pollCount}</span>
+            )}
             {taskId && (
-              <p className="task-info">
-                Task ID : {taskId.slice(0, 18)}…
-              </p>
+              <span className="task-info">Task : {taskId.slice(0, 18)}…</span>
             )}
           </div>
         )}
 
-        {/* Réponse */}
-        <div className="response-area">
-          {loading && !response ? (
-            <div className="typing-indicator"><span /><span /><span /></div>
-          ) : error ? (
-            <span style={{ color: "#ef4444" }}>Erreur : {error}</span>
-          ) : response ? (
-            response
-          ) : (
-            <span className="response-placeholder">
-              L'état de la tâche s'affichera pendant le polling, puis la réponse apparaîtra ici…
-            </span>
-          )}
+        {error && <div className="error-banner">Erreur : {error}</div>}
+
+        {/* Liste de messages */}
+        <MessageList messages={
+          loading
+            ? [...messages, { role: "assistant", content: STATUS_LABELS[status] ?? "…" }]
+            : messages
+        } />
+
+        {/* Barre de saisie */}
+        <div className="chat-input-bar">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Entrez votre message…"
+            disabled={loading}
+            rows={2}
+          />
+          <button
+            className="send-btn polling"
+            onClick={sendMessage}
+            disabled={loading || !input.trim()}
+          >
+            {loading ? <span className="loader" /> : "Envoyer"}
+          </button>
         </div>
       </div>
     </div>

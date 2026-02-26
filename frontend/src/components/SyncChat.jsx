@@ -3,8 +3,10 @@
  *
  * Flux : POST /api/sync/chat → attend la réponse complète → affiche.
  * La connexion HTTP reste ouverte pendant toute la durée de l'inférence.
+ * Supporte l'historique multi-tours.
  */
 import { useState } from "react";
+import MessageList from "./MessageList";
 
 const MODELS = [
   { id: "llama-3.1-8b-instant",   label: "LLaMA 3.1 8B (Rapide)" },
@@ -13,18 +15,21 @@ const MODELS = [
 ];
 
 export default function SyncChat() {
-  const [message,  setMessage]  = useState("");
-  const [response, setResponse] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(false);
-  const [latency,  setLatency]  = useState(null);
   const [model,    setModel]    = useState(MODELS[0].id);
   const [error,    setError]    = useState(null);
 
   const sendMessage = async () => {
-    if (!message.trim() || loading) return;
+    const text = input.trim();
+    if (!text || loading) return;
+
+    const userMsg = { role: "user", content: text };
+    const history = [...messages, userMsg];
+    setMessages(history);
+    setInput("");
     setLoading(true);
-    setResponse("");
-    setLatency(null);
     setError(null);
 
     const start = Date.now();
@@ -32,17 +37,25 @@ export default function SyncChat() {
       const res = await fetch("/api/sync/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, model }),
+        body: JSON.stringify({
+          messages: history.map(({ role, content }) => ({ role, content })),
+          model,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
         throw new Error(err.detail ?? `HTTP ${res.status}`);
       }
       const data = await res.json();
-      setLatency(Date.now() - start);
-      setResponse(data.response);
+      const total = Date.now() - start;
+      setMessages([
+        ...history,
+        { role: "assistant", content: data.response, metrics: { total } },
+      ]);
     } catch (err) {
       setError(err.message);
+      // Retirer le message utilisateur si erreur
+      setMessages(messages);
     } finally {
       setLoading(false);
     }
@@ -63,7 +76,7 @@ export default function SyncChat() {
       </div>
 
       <div className="panel-body">
-        {/* Sélecteur de modèle */}
+        {/* Sélecteur de modèle + bouton nouvelle conversation */}
         <div className="model-select-row">
           <label htmlFor="sync-model">Modèle :</label>
           <select
@@ -74,46 +87,32 @@ export default function SyncChat() {
           >
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
+          <button className="clear-btn" onClick={() => setMessages([])} disabled={loading || messages.length === 0}>
+            Nouvelle conversation
+          </button>
         </div>
 
-        {/* Zone de saisie */}
-        <div className="input-row">
+        {/* Liste de messages */}
+        {error && <div className="error-banner">Erreur : {error}</div>}
+        <MessageList messages={loading ? [...messages, { role: "assistant", content: "…" }] : messages} />
+
+        {/* Barre de saisie */}
+        <div className="chat-input-bar">
           <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Entrez votre message… (Entrée pour envoyer, Shift+Entrée pour sauter une ligne)"
             disabled={loading}
+            rows={2}
           />
           <button
             className="send-btn sync"
             onClick={sendMessage}
-            disabled={loading || !message.trim()}
+            disabled={loading || !input.trim()}
           >
             {loading ? <span className="loader" /> : "Envoyer"}
           </button>
-        </div>
-
-        {/* Métriques */}
-        {latency !== null && (
-          <div className="metrics">
-            <span className="metric-badge total">⏱ Temps total : {latency} ms</span>
-          </div>
-        )}
-
-        {/* Réponse */}
-        <div className="response-area">
-          {loading ? (
-            <div className="typing-indicator"><span /><span /><span /></div>
-          ) : error ? (
-            <span style={{ color: "#ef4444" }}>Erreur : {error}</span>
-          ) : response ? (
-            response
-          ) : (
-            <span className="response-placeholder">
-              La réponse complète apparaîtra ici après l'envoi…
-            </span>
-          )}
         </div>
       </div>
     </div>

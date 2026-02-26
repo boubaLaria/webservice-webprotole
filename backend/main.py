@@ -16,7 +16,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, HT
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
-from schemas import ChatRequest, ChatResponse, TaskCreated, TaskStatus
+from schemas import ChatRequest, ChatResponse, TaskCreated, TaskStatus, Message
 from services.groq_service import call_groq_complete, stream_groq_tokens
 
 # ── Application ──────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ async def root():
     ),
 )
 async def sync_chat(request: ChatRequest):
-    result = await call_groq_complete(request.message, request.model)
+    result = await call_groq_complete([m.model_dump() for m in request.messages], request.model)
     return ChatResponse(response=result)
 
 
@@ -93,15 +93,17 @@ async def sync_chat(request: ChatRequest):
 async def async_chat(request: ChatRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
     tasks[task_id] = {"status": "pending", "result": None, "error": None}
-    background_tasks.add_task(_process_groq_task, task_id, request.message, request.model)
+    background_tasks.add_task(
+        _process_groq_task, task_id, [m.model_dump() for m in request.messages], request.model
+    )
     return TaskCreated(task_id=task_id)
 
 
-async def _process_groq_task(task_id: str, message: str, model: str) -> None:
+async def _process_groq_task(task_id: str, messages: list[dict], model: str) -> None:
     """Tâche exécutée en arrière-plan pour le mode Polling."""
     tasks[task_id]["status"] = "processing"
     try:
-        result = await call_groq_complete(message, model)
+        result = await call_groq_complete(messages, model)
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["result"] = result
     except Exception as exc:
@@ -142,7 +144,7 @@ async def get_task_status(task_id: str):
 )
 async def sse_chat(request: ChatRequest):
     async def event_generator():
-        async for token in stream_groq_tokens(request.message, request.model):
+        async for token in stream_groq_tokens([m.model_dump() for m in request.messages], request.model):
             yield {"data": json.dumps({"token": token})}
         # Signal de fin pour que le client puisse clore la connexion
         yield {"data": json.dumps({"done": True})}
@@ -167,16 +169,16 @@ async def websocket_chat(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
-            message = data.get("message", "").strip()
+            messages = data.get("messages", [])
             model = data.get("model", "llama-3.1-8b-instant")
 
-            if not message:
-                await websocket.send_json({"type": "error", "data": "Message vide"})
+            if not messages:
+                await websocket.send_json({"type": "error", "data": "Messages vides"})
                 continue
 
             await websocket.send_json({"type": "start"})
 
-            async for token in stream_groq_tokens(message, model):
+            async for token in stream_groq_tokens(messages, model):
                 await websocket.send_json({"type": "token", "data": token})
 
             await websocket.send_json({"type": "done"})

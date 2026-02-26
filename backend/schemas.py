@@ -5,9 +5,15 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
 
+class Message(BaseModel):
+    """Un message dans l'historique de conversation."""
+    role: Literal["user", "assistant", "system"]
+    content: str
+
+
 class ChatRequest(BaseModel):
     """Corps de requête commun à tous les modes de communication."""
-    message: str = Field(..., min_length=1, max_length=8192, description="Message de l'utilisateur")
+    messages: list[Message] = Field(..., min_length=1, description="Historique de la conversation")
     model: str = Field(default="llama-3.1-8b-instant", description="Modèle Groq à utiliser")
 
 

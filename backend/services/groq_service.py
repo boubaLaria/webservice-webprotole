@@ -33,7 +33,7 @@ def _get_client() -> AsyncGroq:
     return _client
 
 
-async def call_groq_complete(message: str, model: str = DEFAULT_MODEL) -> str:
+async def call_groq_complete(messages: list[dict], model: str = DEFAULT_MODEL) -> str:
     """
     Appel non-streaming : attend la réponse complète.
     Utilisé par REST Synchrone et Polling (tâche background).
@@ -41,14 +41,14 @@ async def call_groq_complete(message: str, model: str = DEFAULT_MODEL) -> str:
     client = _get_client()
     response = await client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": message}],
+        messages=messages,
         max_tokens=MAX_TOKENS,
     )
     return response.choices[0].message.content or ""
 
 
 async def stream_groq_tokens(
-    message: str, model: str = DEFAULT_MODEL
+    messages: list[dict], model: str = DEFAULT_MODEL
 ) -> AsyncGenerator[str, None]:
     """
     Appel streaming : yield chaque token au fur et à mesure.
@@ -57,7 +57,7 @@ async def stream_groq_tokens(
     client = _get_client()
     stream = await client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": message}],
+        messages=messages,
         max_tokens=MAX_TOKENS,
         stream=True,
     )
